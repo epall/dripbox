@@ -28,20 +28,21 @@ import argparse
 import kqueue
 import paramiko
 
-logging.basicConfig(level=logging.INFO,format="%(asctime)s - %(levelname)s - %(message)s")
-
 SSH_KEY = os.path.join(os.environ['HOME'], ".ssh", "id_rsa")
 LOCAL_PATH = os.getcwd()
 REMOTE_REGEX = re.compile("(.*)@(.+):(.+)")
+LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
+
 
 def main():
     global remote_root, sftp_client
+    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
     # parse arguments
     parser = argparse.ArgumentParser(
-            description='Automatically update remote system with changed local files')
+            description='Automatically sync local files to remote')
     parser.add_argument('-p', '--remote-port',
             type=int, default=22, help="SSH port on remote system")
-    parser.add_argument('remote', nargs=1, help="user@host:path/to/remote/copy")
+    parser.add_argument('remote', nargs=1, help="user@host:path/to/remote/dir")
     args = parser.parse_args()
 
     remote_parts = REMOTE_REGEX.match(args.remote[0])
@@ -53,17 +54,21 @@ def main():
     sftp_client = setup_transport(username, host, args.remote_port)
     watch_files(all_files)
 
+
 def setup_transport(username, host, port):
     transport = paramiko.Transport((host, port))
-    transport.connect(username=username, pkey=paramiko.RSAKey.from_private_key_file(SSH_KEY))
+    key = paramiko.RSAKey.from_private_key_file(SSH_KEY)
+    transport.connect(username=username, pkey=key)
     return paramiko.SFTPClient.from_transport(transport)
+
 
 def update_file(full_path):
     truncated_path = full_path.replace(LOCAL_PATH, "")
-    remote_path = remote_root+truncated_path
+    remote_path = remote_root + truncated_path
     logging.info("Uploading %s to %s" % (full_path, remote_path))
     sftp_client.put(full_path, remote_path)
     logging.info("Done")
+
 
 def watch_files(file_list):
     kq = kqueue.kqueue()
@@ -96,6 +101,7 @@ def watch_files(file_list):
     for fd in fds:
         fd.close()
 
+
 def all_non_hidden_files(top):
     all_files = []
     for root, dirs, files in os.walk(top):
@@ -103,7 +109,7 @@ def all_non_hidden_files(top):
             if d.startswith("."):
                 dirs.remove(d)
         for f in files:
-            all_files.append(os.path.join(root, f)) 
+            all_files.append(os.path.join(root, f))
     return all_files
 
 if __name__ == "__main__":
