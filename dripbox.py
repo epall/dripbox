@@ -75,7 +75,7 @@ def watch_files(file_list):
     fds = []
     events = []
     for f in file_list:
-        logging.debug("Opening %s" % f)
+        logging.debug("Opening %s, the %d file" % (f, len(fds)))
         fd = open(f, "r+")
         fds.append(fd)
         logging.debug("Got fd %s" % fd.fileno())
@@ -109,7 +109,8 @@ def all_non_hidden_files(top):
             if d.startswith("."):
                 dirs.remove(d)
         for f in files:
-            all_files.append(os.path.join(root, f))
+            if not f.endswith(".swp"):
+                all_files.append(os.path.join(root, f))
     return all_files
 
 if __name__ == "__main__":
