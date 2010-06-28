@@ -25,8 +25,9 @@ import logging
 import re
 
 import argparse
-import kqueue
 import paramiko
+import fsevents
+from fsevents import Observer, Stream
 
 SSH_KEY = os.path.join(os.environ['HOME'], ".ssh", "id_rsa")
 LOCAL_PATH = os.getcwd()
@@ -50,9 +51,11 @@ def main():
     host = remote_parts.group(2)
     remote_root = remote_parts.group(3)
 
-    all_files = all_non_hidden_files(os.getcwd())
     sftp_client = setup_transport(username, host, args.remote_port)
-    watch_files(all_files)
+    watch_files(LOCAL_PATH)
+    print("Hit ENTER to quit")
+    raw_input()
+    logging.info("Shutting down")
 
 
 def setup_transport(username, host, port):
@@ -62,56 +65,38 @@ def setup_transport(username, host, port):
     return paramiko.SFTPClient.from_transport(transport)
 
 
-def update_file(full_path):
+def update_file(event):
+    global remote_root, sftp_client
+    full_path = event.name
+    mask = event.mask
     truncated_path = full_path.replace(LOCAL_PATH, "")
     remote_path = remote_root + truncated_path
-    logging.info("Uploading %s to %s" % (full_path, remote_path))
-    sftp_client.put(full_path, remote_path)
+    if mask & fsevents.IN_DELETE:
+        logging.info("Deleting %s" % full_path)
+        if os.path.isdir(full_path):
+            sftp_client.rmdir(remote_path)
+        else:
+            sftp_client.remove(remote_path)
+    else:
+        if os.path.isdir(full_path):
+            logging.info("Creating directory %s" % remote_path)
+            sftp_client.mkdir(remote_path)
+        else:
+            logging.info("Uploading %s to %s" % (full_path, remote_path))
+            sftp_client.put(full_path, remote_path)
     logging.info("Done")
 
 
-def watch_files(file_list):
-    kq = kqueue.kqueue()
-    fds = []
-    events = []
-    for f in file_list:
-        logging.debug("Opening %s, the %d file" % (f, len(fds)))
-        fd = open(f, "r+")
-        fds.append(fd)
-        logging.debug("Got fd %s" % fd.fileno())
-        ev = kqueue.EV_SET(fd.fileno(), kqueue.EVFILT_VNODE,
-                kqueue.EV_ADD | kqueue.EV_ENABLE | kqueue.EV_CLEAR,
-                kqueue.NOTE_DELETE, 0, fd)
-        events.append(ev)
+def watch_files(path):
+    global observer
+    observer = Observer()
+    stream = Stream(update_file, path, file_events=True)
+    observer.schedule(stream)
+    logging.info("Starting observer")
+    observer.daemon = True
+    observer.start()
+    logging.info("Observer started")
 
-    logging.info("Waiting for event")
-    while True:
-        tev = kq.kevent(events, len(events), None)
-        for changed in tev:
-            fd = changed.udata
-            update_file(fd.name)
-            replacement_fd = open(fd.name, "r+")
-            replacement_ev = kqueue.EV_SET(replacement_fd.fileno(),
-                    kqueue.EVFILT_VNODE,
-                    kqueue.EV_ADD | kqueue.EV_ENABLE | kqueue.EV_CLEAR,
-                    kqueue.NOTE_DELETE, 0, replacement_fd)
-            fds.append(replacement_fd)
-            events.append(replacement_ev)
-
-    for fd in fds:
-        fd.close()
-
-
-def all_non_hidden_files(top):
-    all_files = []
-    for root, dirs, files in os.walk(top):
-        for d in dirs:
-            if d.startswith("."):
-                dirs.remove(d)
-        for f in files:
-            if not f.endswith(".swp"):
-                all_files.append(os.path.join(root, f))
-    return all_files
 
 if __name__ == "__main__":
     main()

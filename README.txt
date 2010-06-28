@@ -17,9 +17,9 @@ identical. cd to the root of your local mirror, then start dripbox with
 
 dripbox.py user@host:path/to/remote/copy
 
-Every time you save a file, it will be updated on the remote system.
+Every time you modify something in the local directory tree, it will be
+updated on the remote system.
 
-Known Issues:
-* New files will not get synced
-* Deletions will not get synced
-* Basically, anything other than a simple file update won't get synced
+Dependencies:
+* Requres trunk MacFSEvents from http://github.com/epall/macfsevents
+  (0.2.1 is missing a crucial fix)
