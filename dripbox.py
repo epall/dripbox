@@ -21,6 +21,7 @@
 # Dripbox: Keep remote copy of directory tree in sync with local tree
 
 import os
+import sys
 import logging
 import re
 
@@ -56,6 +57,7 @@ def main():
     print("Hit ENTER to quit")
     raw_input()
     logging.info("Shutting down")
+    sys.exit(0)
 
 
 def setup_transport(username, host, port):
