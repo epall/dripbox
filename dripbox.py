@@ -67,9 +67,25 @@ def setup_transport(username, host, port):
     return paramiko.SFTPClient.from_transport(transport)
 
 
+def is_temp_file(path):
+    if path.endswith(".swp"):
+        return True
+    if path.endswith("~"):
+        return True
+    if path.startswith(".#"):
+        return True
+    return False
+
+
 def update_file(event):
     global remote_root, sftp_client
     full_path = event.name
+    if is_temp_file(full_path):
+        return
+    # Trying to sync git stuff can put remote repo into a really weird state
+    if ".git" in full_path:
+        return
+
     mask = event.mask
     truncated_path = full_path.replace(LOCAL_PATH, "")
     remote_path = remote_root + truncated_path
