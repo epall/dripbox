@@ -25,6 +25,7 @@ import sys
 import logging
 import re
 import time
+import socks
 
 import argparse
 import paramiko
@@ -45,6 +46,7 @@ def main():
             description='Automatically sync local files to remote')
     parser.add_argument('-p', '--remote-port',
             type=int, default=22, help="SSH port on remote system")
+    parser.add_argument('-x', '--proxy', help="SOCKS5 proxy host:port")
     parser.add_argument('remote', nargs=1, help="user@host:path/to/remote/dir")
     args = parser.parse_args()
 
@@ -53,7 +55,16 @@ def main():
     host = remote_parts.group(2)
     remote_root = remote_parts.group(3)
 
-    sftp_client = setup_transport(username, host, args.remote_port)
+    connection = (host, args.remote_port)
+    if args.proxy:
+        logging.info("Using proxy %s" % args.proxy)
+        proxy_host, proxy_port = args.proxy.split(":")
+        sock = socks.socksocket()
+        sock.setproxy(socks.PROXY_TYPE_SOCKS5, proxy_host, int(proxy_port))
+        sock.connect(connection)
+        connection = sock
+
+    sftp_client = setup_transport(username, connection)
     watch_files(LOCAL_PATH)
     print("Hit ENTER to quit")
     raw_input()
@@ -61,8 +72,8 @@ def main():
     sys.exit(0)
 
 
-def setup_transport(username, host, port):
-    transport = paramiko.Transport((host, port))
+def setup_transport(username, connection):
+    transport = paramiko.Transport(connection)
     key = paramiko.RSAKey.from_private_key_file(SSH_KEY)
     transport.connect(username=username, pkey=key)
     return paramiko.SFTPClient.from_transport(transport)
@@ -109,7 +120,7 @@ def update_file(event):
                 sftp_client.put(full_path, remote_path)
             except OSError, e:
                 logging.warn("Couldn't upload file: %s" % e)
-                time.sleep(0.1Z
+                time.sleep(0.1)
                 try:
                     sftp_client.put(full_path, remote_path)
                 except OSError, e:
