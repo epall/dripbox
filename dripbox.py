@@ -24,6 +24,7 @@ import os
 import sys
 import logging
 import re
+import time
 
 import argparse
 import paramiko
@@ -98,10 +99,21 @@ def update_file(event):
     else:
         if os.path.isdir(full_path):
             logging.info("Creating directory %s" % remote_path)
-            sftp_client.mkdir(remote_path)
+            try:
+                sftp_client.mkdir(remote_path)
+            except IOError:
+                logging.info("Directory already exists")
         else:
             logging.info("Uploading %s to %s" % (full_path, remote_path))
-            sftp_client.put(full_path, remote_path)
+            try:
+                sftp_client.put(full_path, remote_path)
+            except OSError, e:
+                logging.warn("Couldn't upload file: %s" % e)
+                time.sleep(0.1Z
+                try:
+                    sftp_client.put(full_path, remote_path)
+                except OSError, e:
+                    logging.error("Failed to upload file: %s" % e)
     logging.info("Done")
 
 
