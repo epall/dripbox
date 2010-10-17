@@ -65,7 +65,9 @@ def main():
         connection = sock
 
     sftp_client = setup_transport(username, connection)
-    watch_files(LOCAL_PATH)
+    dirs_to_watch = [entry for entry in os.listdir(LOCAL_PATH) if
+            os.path.isdir(entry) and not entry.startswith(".")]
+    watch_files(dirs_to_watch)
     print("Hit ENTER to quit")
     raw_input()
     logging.info("Shutting down")
@@ -118,6 +120,13 @@ def update_file(event):
             logging.info("Uploading %s to %s" % (full_path, remote_path))
             try:
                 sftp_client.put(full_path, remote_path)
+            except EOFError, e:
+                logging.warn("Couldn't upload file: %s" % e)
+                time.sleep(0.1)
+                try:
+                    sftp_client.put(full_path, remote_path)
+                except EOFError, e:
+                    logging.error("Failed to upload file: %s" % e)
             except OSError, e:
                 logging.warn("Couldn't upload file: %s" % e)
                 time.sleep(0.1)
@@ -128,10 +137,10 @@ def update_file(event):
     logging.info("Done")
 
 
-def watch_files(path):
+def watch_files(paths):
     global observer
     observer = Observer()
-    stream = Stream(update_file, path, file_events=True)
+    stream = Stream(update_file, file_events=True, *paths)
     observer.schedule(stream)
     logging.info("Starting observer")
     observer.daemon = True
