@@ -19,7 +19,3 @@ dripbox.py user@host:path/to/remote/copy
 
 Every time you modify something in the local directory tree, it will be
 updated on the remote system.
-
-Dependencies:
-* Requres trunk MacFSEvents from http://github.com/epall/macfsevents
-  (0.2.1 is missing a crucial fix)

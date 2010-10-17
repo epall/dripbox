@@ -20,46 +20,27 @@
 # Dripbox: Keep remote copy of directory tree in sync with local tree
 
 import os
-import sys
 import logging
-import re
 import time
 
-import argparse
 import paramiko
 import fsevents
 from fsevents import Observer, Stream
 
 SSH_KEY = os.path.join(os.environ['HOME'], ".ssh", "id_rsa")
 LOCAL_PATH = os.getcwd()
-REMOTE_REGEX = re.compile("(.*)@(.+):(.+)")
-LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
+
+log = logging.getLogger("dripbox")
 
 
-def main():
+def launch(username, host, port, remote_path):
     global remote_root, sftp_client
-    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
-    # parse arguments
-    parser = argparse.ArgumentParser(
-            description='Automatically sync local files to remote')
-    parser.add_argument('-p', '--remote-port',
-            type=int, default=22, help="SSH port on remote system")
-    parser.add_argument('remote', nargs=1, help="user@host:path/to/remote/dir")
-    args = parser.parse_args()
 
-    remote_parts = REMOTE_REGEX.match(args.remote[0])
-    username = remote_parts.group(1)
-    host = remote_parts.group(2)
-    remote_root = remote_parts.group(3)
-
-    sftp_client = setup_transport(username, host, args.remote_port)
+    remote_root = remote_path
+    sftp_client = setup_transport(username, host, port)
     dirs_to_watch = [entry for entry in os.listdir(LOCAL_PATH) if
             os.path.isdir(entry) and not entry.startswith(".")]
     watch_files(dirs_to_watch)
-    print("Hit ENTER to quit")
-    raw_input()
-    logging.info("Shutting down")
-    sys.exit(0)
 
 
 def setup_transport(username, host, port):
@@ -92,37 +73,37 @@ def update_file(event):
     truncated_path = full_path.replace(LOCAL_PATH, "")
     remote_path = remote_root + truncated_path
     if mask & fsevents.IN_DELETE:
-        logging.info("Deleting %s" % full_path)
+        log.info("Deleting %s" % full_path)
         if os.path.isdir(full_path):
             sftp_client.rmdir(remote_path)
         else:
             sftp_client.remove(remote_path)
     else:
         if os.path.isdir(full_path):
-            logging.info("Creating directory %s" % remote_path)
+            log.info("Creating directory %s" % remote_path)
             try:
                 sftp_client.mkdir(remote_path)
             except IOError:
-                logging.info("Directory already exists")
+                log.info("Directory already exists")
         else:
-            logging.info("Uploading %s to %s" % (full_path, remote_path))
+            log.info("Uploading %s to %s" % (full_path, remote_path))
             try:
                 sftp_client.put(full_path, remote_path)
             except EOFError, e:
-                logging.warn("Couldn't upload file: %s" % e)
+                log.warn("Couldn't upload file: %s" % e)
                 time.sleep(0.1)
                 try:
                     sftp_client.put(full_path, remote_path)
                 except EOFError, e:
-                    logging.error("Failed to upload file: %s" % e)
+                    log.error("Failed to upload file: %s" % e)
             except OSError, e:
-                logging.warn("Couldn't upload file: %s" % e)
+                log.warn("Couldn't upload file: %s" % e)
                 time.sleep(0.1)
                 try:
                     sftp_client.put(full_path, remote_path)
                 except OSError, e:
-                    logging.error("Failed to upload file: %s" % e)
-    logging.info("Done")
+                    log.error("Failed to upload file: %s" % e)
+    log.info("Done")
 
 
 def watch_files(paths):
@@ -130,11 +111,7 @@ def watch_files(paths):
     observer = Observer()
     stream = Stream(update_file, file_events=True, *paths)
     observer.schedule(stream)
-    logging.info("Starting observer")
+    log.info("Starting observer")
     observer.daemon = True
     observer.start()
-    logging.info("Observer started")
-
-
-if __name__ == "__main__":
-    main()
+    log.info("Observer started")

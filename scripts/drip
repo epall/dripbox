@@ -19,5 +19,30 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 import dripbox
+import re
+import logging
+import argparse
+import sys
 
-dripbox.main()
+LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
+REMOTE_REGEX = re.compile("(.*)@(.+):(.+)")
+
+logging.basicConfig(level=logging.INFO)
+# parse arguments
+parser = argparse.ArgumentParser(
+        description='Automatically sync local files to remote')
+parser.add_argument('-p', '--remote-port',
+        type=int, default=22, help="SSH port on remote system")
+parser.add_argument('remote', nargs=1, metavar="USER@HOST:PATH")
+args = parser.parse_args()
+
+remote_parts = REMOTE_REGEX.match(args.remote[0])
+username = remote_parts.group(1)
+host = remote_parts.group(2)
+remote_root = remote_parts.group(3)
+
+dripbox.launch(username, host, args.remote_port, remote_root)
+
+print("Hit ENTER to quit")
+raw_input()
+sys.exit(0)
