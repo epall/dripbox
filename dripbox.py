@@ -74,10 +74,13 @@ def update_file(event):
     remote_path = remote_root + truncated_path
     if mask & fsevents.IN_DELETE:
         log.info("Deleting %s" % full_path)
-        if os.path.isdir(full_path):
-            sftp_client.rmdir(remote_path)
-        else:
-            sftp_client.remove(remote_path)
+        try:
+            if os.path.isdir(full_path):
+                sftp_client.rmdir(remote_path)
+            else:
+                sftp_client.remove(remote_path)
+        except IOError:
+            log.info("File was already deleted")
     else:
         if os.path.isdir(full_path):
             log.info("Creating directory %s" % remote_path)
