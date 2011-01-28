@@ -23,25 +23,34 @@ import re
 import logging
 import argparse
 import sys
+import os
+import getpass
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
-REMOTE_REGEX = re.compile("(.*)@(.+):(.+)")
+REMOTE_MATCH = re.compile("(.+@)?(.+):(.+)").match
 
 logging.basicConfig(level=logging.INFO)
 # parse arguments
 parser = argparse.ArgumentParser(
         description='Automatically sync local files to remote')
 parser.add_argument('-p', '--remote-port',
-        type=int, default=22, help="SSH port on remote system")
+        type=int, help="SSH port on remote system")
 parser.add_argument('remote', nargs=1, metavar="USER@HOST:PATH")
 args = parser.parse_args()
 
-remote_parts = REMOTE_REGEX.match(args.remote[0])
-username = remote_parts.group(1)
-host = remote_parts.group(2)
-remote_root = remote_parts.group(3)
 
-dripbox.launch(username, host, args.remote_port, remote_root)
+def parse_remote(remote):
+    username, host, remote_root = REMOTE_MATCH(remote).groups()
+    if username:
+        username = username.rstrip('@')
+    else:
+        username = getpass.getuser()
+
+    return dict(username=username, host=host, remote_path=remote_root)
+
+launch_args = parse_remote(args.remote[0])
+launch_args['port'] = args.remote_port
+dripbox.launch(**launch_args)
 
 print("Hit ENTER to quit")
 raw_input()

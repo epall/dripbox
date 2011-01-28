@@ -22,18 +22,30 @@
 import os
 import logging
 import time
+import getpass
 
 import paramiko
 import fsevents
 from fsevents import Observer, Stream
 
 SSH_KEY = os.path.join(os.environ['HOME'], ".ssh", "id_rsa")
+SSH_CONFIG = os.path.join(os.environ['HOME'], ".ssh", "config")
 LOCAL_PATH = os.getcwd()
 
 log = logging.getLogger("dripbox")
 
 
-def launch(username, host, port, remote_path):
+def _get_ssh_config_port(host):
+    ssh_config = paramiko.SSHConfig()
+    with open(SSH_CONFIG, 'r') as cfile:
+        ssh_config.parse(cfile)
+    port = ssh_config.lookup(host).get('port')
+    if port:
+        port = int(port)
+    return port
+
+
+def launch(username, host, remote_path, port=None):
     global remote_root, sftp_client
 
     remote_root = remote_path
@@ -43,9 +55,22 @@ def launch(username, host, port, remote_path):
     watch_files(dirs_to_watch)
 
 
-def setup_transport(username, host, port):
+def setup_transport(username, host, port=None):
+    if not port:
+        port = _get_ssh_config_port(host) or 22
+
     transport = paramiko.Transport((host, port))
-    key = paramiko.RSAKey.from_private_key_file(SSH_KEY)
+    try:
+        key = paramiko.RSAKey.from_private_key_file(SSH_KEY)
+    except paramiko.PasswordRequiredException:
+        passwd = getpass.getpass("Enter passphrase for %s: " % SSH_KEY)
+        try:
+            key = paramiko.RSAKey.from_private_key_file(filename=SSH_KEY,
+                                                        password=passwd)
+        except paramiko.SSHException:
+            print "Could not read private key; bad password?"
+            raise SystemExit(1)
+
     transport.connect(username=username, pkey=key)
     return paramiko.SFTPClient.from_transport(transport)
 
