@@ -13,13 +13,13 @@ to use local editing tools and get lightning-fast response, but still affect
 files on a remote system.
 
 To get started, you need to have a local tree and a remote tree that are
-identical. First, install dripbox, probably directly from the package with
+identical. First, install dripbox:
 
-sudo python setup.py install
+    sudo pip install .
 
 cd to the root of your local mirror, then start dripbox with
 
-drip user@host:path/to/remote/copy
+    drip user@host:path/to/remote/copy
 
 Every time you modify something in the local directory tree, it will be
 updated on the remote system.
