@@ -3,7 +3,7 @@
 from distutils.core import setup
 
 setup(name='Dripbox',
-      version='0.1.6',
+      version='0.2.1',
       description='Smart one-way SFTP file synchronization',
       author='Eric Allen',
       author_email='eric@hackerengineer.net',
