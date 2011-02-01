@@ -22,7 +22,6 @@ import dripbox
 import re
 import logging
 import argparse
-import sys
 import getpass
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
@@ -53,5 +52,7 @@ if not args.force:
 dripbox.launch(username, host, remote_root, args.remote_port)
 
 print("Hit ENTER to quit")
-raw_input()
-sys.exit(0)
+try:
+    raw_input()
+except KeyboardInterrupt:
+    print
