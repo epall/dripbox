@@ -25,9 +25,10 @@ import argparse
 import getpass
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
-REMOTE_MATCH = re.compile("(.+@)?(.+):(.+)").match
 
-logging.basicConfig(level=logging.INFO)
+# setup logging
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+
 # parse arguments
 parser = argparse.ArgumentParser(
         description='Automatically sync local files to remote')
@@ -41,7 +42,11 @@ parser.add_argument('-f', '--force', action="store_true", default=False,
 args = parser.parse_args()
 remote = args.remote[0]
 
-username, host, remote_root = REMOTE_MATCH(remote).groups()
+# parse remote
+matched = re.match("(.+@)?(.+):(.+)", remote)
+if not matched:
+    parser.error("Didn't recognize specified host, use: USER@HOST:PATH")
+username, host, remote_root = matched.groups()
 if username:
     username = username.rstrip('@')
 else:
@@ -49,8 +54,8 @@ else:
 
 if not args.force:
     dripbox.rsync(remote, host, args.remote_port, args.sync)
-dripbox.launch(username, host, remote_root, args.remote_port)
 
+dripbox.launch(username, host, remote_root, args.remote_port)
 print("Hit ENTER to quit")
 try:
     raw_input()
