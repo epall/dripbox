@@ -23,9 +23,7 @@ import re
 import logging
 import argparse
 import sys
-import os
 import getpass
-import subprocess
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 REMOTE_MATCH = re.compile("(.+@)?(.+):(.+)").match
@@ -42,49 +40,17 @@ parser.add_argument('-s', '--sync', action="store_true", default=False,
 parser.add_argument('-f', '--force', action="store_true", default=False,
     help="Force dripbox to start even with a dirty remote")
 args = parser.parse_args()
+remote = args.remote[0]
 
-
-def parse_remote(remote):
-    username, host, remote_root = REMOTE_MATCH(remote).groups()
-    if username:
-        username = username.rstrip('@')
-    else:
-        username = getpass.getuser()
-
-    return dict(username=username, host=host, remote_path=remote_root)
-
-launch_args = parse_remote(args.remote[0])
-launch_args['port'] = args.remote_port
-
-port = args.remote_port or 22
-if args.sync:
-    command = ["rsync", "--delete", "-rltvze", "ssh -p%s" % port, "--exclude",
-        ".git", ".", args.remote[0]]
-    subprocess.check_call(command)
+username, host, remote_root = REMOTE_MATCH(remote).groups()
+if username:
+    username = username.rstrip('@')
 else:
-    diff = subprocess.Popen(
-            ["rsync", "--delete", "-crnltvze", "ssh -p%s" % port, "--exclude",
-                ".git", ".", args.remote[0]],
-            stdout=subprocess.PIPE)
-    output, _ = diff.communicate()
-    for line in output.split("\n"):
-        if line == "":
-            pass
-        elif line == "sending incremental file list":
-            pass
-        elif re.match("sent \d+ bytes +received \d+ bytes  [0-9\.]+ bytes/sec", line):
-            pass
-        elif re.search("total size is \d+ +speedup is [0-9\.]", line):
-            pass
-        else:
-            print "WARNING: The remote tree is out of sync with the local tree. This is a dangerous situation."
-            if not args.force:
-                print "Run dripbox with -f if you know what you're doing and want to run dripbox anyway"
-                print "We recommend you use --sync instead."
-                raise SystemExit(1)
-            break
+    username = getpass.getuser()
 
-dripbox.launch(**launch_args)
+if not args.force:
+    dripbox.rsync(remote, host, args.remote_port, args.sync)
+dripbox.launch(username, host, remote_root, args.remote_port)
 
 print("Hit ENTER to quit")
 raw_input()

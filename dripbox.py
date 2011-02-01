@@ -20,9 +20,11 @@
 # Dripbox: Keep remote copy of directory tree in sync with local tree
 
 import os
+import re
 import logging
 import time
 import getpass
+import subprocess
 
 import paramiko
 import fsevents
@@ -34,6 +36,10 @@ LOCAL_PATH = os.getcwd()
 
 log = logging.getLogger("dripbox")
 
+# globals
+remote_root = None
+sftp_client = None
+
 
 def _get_ssh_config_port(host):
     ssh_config = paramiko.SSHConfig()
@@ -43,6 +49,36 @@ def _get_ssh_config_port(host):
     if port:
         port = int(port)
     return port
+
+
+def rsync(remote, host, port=None, sync=False):
+    if not port:
+        port = _get_ssh_config_port(host) or 22
+
+    if sync:
+        command = ["rsync", "--delete", "-rltvze", "ssh -p%s" % port,
+                   "--exclude", ".git", ".", remote]
+        subprocess.check_call(command)
+    else:
+        command = ["rsync", "--delete", "-crnltvze", "ssh -p%s" % port,
+                   "--exclude", ".git", ".", remote]
+        diff = subprocess.Popen(command, stdout=subprocess.PIPE)
+        output, _ = diff.communicate()
+        for line in output.split("\n"):
+            if line == "":
+                pass
+            elif line == "sending incremental file list":
+                pass
+            elif re.match("sent \d+ bytes +received \d+ bytes  [0-9\.]+ bytes/sec", line):
+                pass
+            elif re.search("total size is \d+ +speedup is [0-9\.]", line):
+                pass
+            else:
+                print output
+                print "WARNING: The remote tree is out of sync with the local tree. This is a dangerous situation."
+                print "Run dripbox with -f if you know what you're doing and want to run dripbox anyway"
+                print "We recommend you use --sync instead."
+                raise SystemExit(1)
 
 
 def launch(username, host, remote_path, port=None):
