@@ -19,12 +19,14 @@
 
 # Dripbox: Keep remote copy of directory tree in sync with local tree
 
+import sys
 import os
 import re
 import logging
 import time
 import getpass
 import subprocess
+import socket  # to catch socket errors
 
 import paramiko
 import fsevents
@@ -95,7 +97,13 @@ def setup_transport(username, host, port=None):
     if not port:
         port = _get_ssh_config_port(host) or 22
 
-    transport = paramiko.Transport((host, port))
+    try:
+        transport = paramiko.Transport((host, port))
+    except socket.gaierror, e:
+        sys.stderr.write("Couldn't connect to %s:%s (%s)\n"
+                         % (host, port, str(e)))
+        raise SystemExit(1)
+
     try:
         key = paramiko.RSAKey.from_private_key_file(SSH_KEY)
     except paramiko.PasswordRequiredException:
