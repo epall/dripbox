@@ -44,12 +44,22 @@ sftp_client = None
 
 
 def _get_ssh_config_port(host):
+    if not os.path.exists(SSH_CONFIG):
+        return None
+
     ssh_config = paramiko.SSHConfig()
-    with open(SSH_CONFIG, 'r') as cfile:
-        ssh_config.parse(cfile)
+    try:
+        with open(SSH_CONFIG, 'r') as cfile:
+            ssh_config.parse(cfile)
+    except OSError, e:
+        log.error("Could not open SSH config: %s", str(e))
+        return None
+    except Exception, e:
+        log.error("Problem parsing SSH config: %s %s", type(e), str(e))
+        return None
+
     port = ssh_config.lookup(host).get('port')
-    if port:
-        port = int(port)
+    port = port and int(port)
     return port
 
 
