@@ -102,9 +102,7 @@ def launch(username_p, host_p, remote_path, port_p=None):
 
     remote_root = remote_path
     sftp_client = setup_transport(username, host, port)
-    dirs_to_watch = [entry for entry in os.listdir(LOCAL_PATH) if
-            os.path.isdir(entry) and not entry.startswith(".")]
-    watch_files(dirs_to_watch)
+    watch_files(LOCAL_PATH)
 
 
 def setup_transport(username, host, port=None):
@@ -214,12 +212,12 @@ def update_file(event):
             reconnect()
             update_file(event)
 
-def watch_files(paths):
+def watch_files(path):
     global observer
     observer = Observer()
-    stream = Stream(update_file, file_events=True, *paths)
+    stream = Stream(update_file, path, file_events=True)
     observer.schedule(stream)
-    log.info("Starting observer")
+    log.info("Watching for file changes in %s", path)
     observer.daemon = True
     observer.start()
     log.info("Observer started")
