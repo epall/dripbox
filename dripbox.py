@@ -27,6 +27,7 @@ import time
 import getpass
 import subprocess
 import socket  # to catch socket errors
+import errno
 
 import paramiko
 import fsevents
@@ -204,7 +205,14 @@ def update_file(event):
     except socket.timeout:
         reconnect()
         update_file(event)
-
+    except IOError, e:
+        if e.errno == errno.EACCES:
+            log.error("PERMISSION DENIED writing to %s", remote_path)
+            log.error("Dripbox was UNABLE TO SYNC %s to %s", full_path, remote_path)
+        else:
+            log.error("IOError: %s", str(e))
+            reconnect()
+            update_file(event)
 
 def watch_files(paths):
     global observer
