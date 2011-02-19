@@ -93,8 +93,11 @@ def rsync(remote, host, port=None, sync=False):
                 raise SystemExit(1)
 
 
-def launch(username, host, remote_path, port=None):
-    global remote_root, sftp_client
+def launch(username_p, host_p, remote_path, port_p=None):
+    global remote_root, sftp_client, username, host, port
+    username = username_p
+    host = host_p
+    port = port_p
 
     remote_root = remote_path
     sftp_client = setup_transport(username, host, port)
@@ -126,7 +129,14 @@ def setup_transport(username, host, port=None):
             raise SystemExit(1)
 
     transport.connect(username=username, pkey=key)
-    return paramiko.SFTPClient.from_transport(transport)
+    client = paramiko.SFTPClient.from_transport(transport)
+    client.get_channel().settimeout(5)
+    return client
+
+def reconnect():
+    log.warn("Re-connecting")
+    global sftp_client, username, host, port
+    sftp_client = setup_transport(username, host, port)
 
 
 def is_temp_file(path):
@@ -151,41 +161,49 @@ def update_file(event):
     mask = event.mask
     truncated_path = full_path.replace(LOCAL_PATH, "")
     remote_path = remote_root + truncated_path
-    if mask & fsevents.IN_DELETE:
-        log.info("Deleting %s" % full_path)
-        try:
-            if os.path.isdir(full_path):
-                sftp_client.rmdir(remote_path)
-            else:
-                sftp_client.remove(remote_path)
-        except IOError:
-            log.info("File was already deleted")
-    else:
-        if os.path.isdir(full_path):
-            log.info("Creating directory %s" % remote_path)
+
+    try:
+        if mask & fsevents.IN_DELETE:
+            log.info("Deleting %s" % full_path)
             try:
-                sftp_client.mkdir(remote_path)
+                if os.path.isdir(full_path):
+                    sftp_client.rmdir(remote_path)
+                else:
+                    sftp_client.remove(remote_path)
             except IOError:
-                log.info("Directory already exists")
+                log.info("File was already deleted")
         else:
-            log.info("Uploading %s to %s" % (full_path, remote_path))
-            try:
-                sftp_client.put(full_path, remote_path)
-            except EOFError, e:
-                log.warn("Couldn't upload file: %s" % e)
-                time.sleep(0.1)
+            if os.path.isdir(full_path):
+                log.info("Creating directory %s" % remote_path)
+                try:
+                    sftp_client.mkdir(remote_path)
+                except IOError:
+                    log.info("Directory already exists")
+            else:
+                log.info("Uploading %s to %s" % (full_path, remote_path))
                 try:
                     sftp_client.put(full_path, remote_path)
                 except EOFError, e:
-                    log.error("Failed to upload file: %s" % e)
-            except OSError, e:
-                log.warn("Couldn't upload file: %s" % e)
-                time.sleep(0.1)
-                try:
+                    log.warn("Couldn't upload file")
+                    time.sleep(0.1)
                     sftp_client.put(full_path, remote_path)
                 except OSError, e:
-                    log.error("Failed to upload file: %s" % e)
-    log.info("Done")
+                    log.warn("Couldn't upload file")
+                    time.sleep(0.1)
+                    try:
+                        sftp_client.put(full_path, remote_path)
+                    except OSError, e:
+                        log.exception("Failed to upload file: %s" % e)
+        log.info("Done uploading %s", full_path)
+    except paramiko.SSHException:
+        reconnect()
+        update_file(event)
+    except EOFError:
+        reconnect()
+        update_file(event)
+    except socket.timeout:
+        reconnect()
+        update_file(event)
 
 
 def watch_files(paths):
