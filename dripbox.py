@@ -107,6 +107,27 @@ def launch(username_p, host_p, remote_path, port_p=None):
     watch_files(dirs_to_watch)
 
 
+def get_ssh_key():
+    agent = paramiko.Agent()
+    if agent.keys:
+        # TODO: support having more than one key loaded
+        if len(agent.keys) > 1:
+            print ("You have more than one key in your SSH Agent"
+                   " — using the first found!")
+        return agent.keys[0]
+
+    try:
+        return paramiko.RSAKey.from_private_key_file(SSH_KEY)
+    except paramiko.PasswordRequiredException:
+        passwd = getpass.getpass("Enter passphrase for %s: " % SSH_KEY)
+        try:
+            return paramiko.RSAKey.from_private_key_file(filename=SSH_KEY,
+                                                         password=passwd)
+        except paramiko.SSHException:
+            print "Could not read private key; bad password?"
+            raise SystemExit(1)
+
+
 def setup_transport(username, host, port=None):
     if not port:
         port = _get_ssh_config_port(host) or 22
@@ -118,17 +139,7 @@ def setup_transport(username, host, port=None):
                          % (host, port, str(e)))
         raise SystemExit(1)
 
-    try:
-        key = paramiko.RSAKey.from_private_key_file(SSH_KEY)
-    except paramiko.PasswordRequiredException:
-        passwd = getpass.getpass("Enter passphrase for %s: " % SSH_KEY)
-        try:
-            key = paramiko.RSAKey.from_private_key_file(filename=SSH_KEY,
-                                                        password=passwd)
-        except paramiko.SSHException:
-            print "Could not read private key; bad password?"
-            raise SystemExit(1)
-
+    key = get_ssh_key()
     transport.connect(username=username, pkey=key)
     client = paramiko.SFTPClient.from_transport(transport)
     client.get_channel().settimeout(5)
