@@ -109,7 +109,7 @@ def launch(username_p, host_p, remote_path, port_p=None):
 
 def get_ssh_key():
     agent = paramiko.Agent()
-    if agent.keys:
+    if hasattr(agent, 'keys') and agent.keys:
         # TODO: support having more than one key loaded
         if len(agent.keys) > 1:
             print ("You have more than one key in your SSH Agent"
