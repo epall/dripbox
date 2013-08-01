@@ -127,19 +127,20 @@ def setup_transport(username, host, port=None):
     if not port:
         port = _get_ssh_config_port(host) or 22
 
-    try:
-        transport = paramiko.Transport((host, port))
-    except socket.gaierror, e:
-        sys.stderr.write("Couldn't connect to %s:%s (%s)\n"
-                         % (host, port, str(e)))
-        raise SystemExit(1)
-
     for key in get_ssh_keys():
       try:
+        transport = paramiko.Transport((host, port))
         transport.connect(username=username, pkey=key)
         break # key worked, continue
+      except socket.gaierror, e:
+          sys.stderr.write("Couldn't connect to %s:%s (%s)\n"
+                           % (host, port, str(e)))
+          raise SystemExit(1)
       except paramiko.AuthenticationException:
         continue # try another key
+    else:
+      log.error("No SSH keys authenticated")
+      raise SystemExit(2)
     client = paramiko.SFTPClient.from_transport(transport)
     client.get_channel().settimeout(5)
     return client
